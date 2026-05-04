@@ -1,0 +1,35 @@
+# Build stage
+FROM node:20-alpine as build-stage
+
+WORKDIR /app
+
+# Copy package files first for better caching
+COPY package.json ./
+# Use --legacy-peer-deps to avoid conflicts and install only production needed if possible
+# but for building we need devDeps too
+RUN npm install --legacy-peer-deps
+
+COPY . .
+
+# Build the application
+RUN npm run build
+
+# Production stage
+FROM nginx:stable-alpine as production-stage
+
+# Copy built assets from build-stage
+COPY --from=build-stage /app/dist /usr/share/nginx/html
+
+# Add a basic nginx config to handle SPA routing if needed
+RUN echo 'server { \
+    listen 80; \
+    location / { \
+        root /usr/share/nginx/html; \
+        index index.html; \
+        try_files $uri $uri/ /index.html; \
+    } \
+}' > /etc/nginx/conf.d/default.conf
+
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]
